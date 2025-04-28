@@ -25,4 +25,8 @@ export class ResourceManager {
     }
     return handler(request.params);
   }
+
+  hasResources() {
+    return Object.keys(this.resources.definitions).length > 0;
+  }
 }

@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "npx vitest --run"
+    "test": "npx vitest --run",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
   },
   "keywords": [],
   "author": "",
@@ -11,6 +14,7 @@
   "description": "",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.10.2",
+    "tsx": "^4.19.3",
     "typescript": "^5.8.3",
     "zod": "^3.24.3"
   },

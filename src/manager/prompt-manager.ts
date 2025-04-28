@@ -25,4 +25,8 @@ export class PromptManager {
     }
     return handler(request.params);
   }
+
+  hasPrompts() {
+    return Object.keys(this.prompts.definitions).length > 0;
+  }
 }

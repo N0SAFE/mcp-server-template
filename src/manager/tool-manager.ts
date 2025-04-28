@@ -125,4 +125,8 @@ export class ToolManager {
     }
     return handler(request.params.arguments);
   }
+
+  hasTools() {
+    return Object.keys(this.tools).length > 0;
+  }
 }
