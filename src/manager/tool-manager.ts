@@ -1,29 +1,37 @@
 // ToolManager handles tool logic for McpServer
 import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
-import { ToolDefinition, ToolMode, ToolsetConfig, DynamicToolDiscoveryOptions } from "../types";
+import {
+  ToolDefinition,
+  ToolsetConfig,
+  DynamicToolDiscoveryOptions,
+  Promisable,
+  ToolCapability,
+} from "../types";
+import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 export class ToolManager {
-  private readonly tools: Record<string, { definitions: ToolDefinition; handlers: (params: any) => Promise<any>; }> = {};
+  private readonly tools: Map<string, ToolCapability> = new Map();
   private enabledTools: Set<string> = new Set();
   private toolsetConfig: ToolsetConfig;
   constructor(
-    toolsCapabilities: Record<string, { definitions: ToolDefinition; handlers: (params: any) => Promise<any>; }>,
+    toolsCapabilities: ToolCapability[],
     toolsetConfig: ToolsetConfig,
     dynamicToolDiscovery?: DynamicToolDiscoveryOptions
   ) {
     this.toolsetConfig = toolsetConfig;
-    Object.entries(toolsCapabilities).forEach(([name, tool]) => {
-      this.tools[name] = tool;
-      this.enabledTools.add(name);
+    toolsCapabilities.forEach((capability) => {
+      this.tools.set(capability.definition.name, capability);
+      this.enabledTools.add(capability.definition.name);
     });
     // Dynamic tool discovery logic
     if (dynamicToolDiscovery?.enabled) {
       // Tool to list available/enabled tools
-      this.tools["dynamic_tool_list"] = {
-        definitions: {
+      this.tools.set("dynamic_tool_list", {
+        definition: {
           name: "dynamic_tool_list",
           description: "List, enable, or disable available tools dynamically.",
-          inputSchema: { type: "object", properties: {}, required: [] },
+          inputSchema: z.object({}),
           annotations: {
             title: "Dynamic Tool Discovery",
             readOnlyHint: true,
@@ -32,41 +40,44 @@ export class ToolManager {
             openWorldHint: false,
           },
         },
-        handlers: async () => ({
+        handler: () => ({
           content: [
             {
               type: "text",
-              text: JSON.stringify({
-                available: Object.keys(this.tools),
-                enabled: Array.from(this.enabledTools),
-              }, null, 2),
+              text: JSON.stringify(
+                {
+                  available: Array.from(this.tools.keys()),
+                  enabled: Array.from(this.enabledTools),
+                },
+                null,
+                2
+              ),
             },
           ],
         }),
-      };
+      });
       this.enabledTools.add("dynamic_tool_list");
       // Tool to enable/disable toolsets
-      this.tools["dynamic_tool_trigger"] = {
-        definitions: {
+      this.tools.set("dynamic_tool_trigger", {
+        definition: {
           name: "dynamic_tool_trigger",
           description: "Enable or disable multiple toolsets.",
-          inputSchema: {
-            type: "object",
-            properties: {
-              toolsets: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    name: { type: "string", enum: dynamicToolDiscovery.availableToolsets },
-                    trigger: { type: "string", enum: ["enable", "disable"] },
-                  },
-                  required: ["name", "trigger"],
-                },
-              },
-            },
-            required: ["toolsets"],
-          },
+          inputSchema: z.object({
+            toolsets: z.array(
+              z.object({
+                name: z
+                  .string()
+                  .refine(
+                    (name) =>
+                      dynamicToolDiscovery.availableToolsets.includes(name),
+                    {
+                      message: "Invalid toolset name",
+                    }
+                  ),
+                trigger: z.enum(["enable", "disable"]),
+              })
+            ),
+          }),
           annotations: {
             title: "Dynamic Tool Trigger",
             readOnlyHint: false,
@@ -75,7 +86,7 @@ export class ToolManager {
             openWorldHint: false,
           },
         },
-        handlers: async (params: any) => {
+        handler: async (params: any) => {
           const { toolsets } = params;
           for (const { name, trigger } of toolsets) {
             if (trigger === "enable") {
@@ -88,45 +99,83 @@ export class ToolManager {
             content: [
               {
                 type: "text",
-                text: JSON.stringify({
-                  available: Object.keys(this.tools),
-                  enabled: Array.from(this.enabledTools),
-                }, null, 2),
+                text: JSON.stringify(
+                  {
+                    available: Array.from(this.tools.keys()),
+                    enabled: Array.from(this.enabledTools),
+                  },
+                  null,
+                  2
+                ),
               },
             ],
           };
         },
-      };
+      });
       this.enabledTools.add("dynamic_tool_trigger");
       // Optionally enable default toolsets
       if (dynamicToolDiscovery.defaultEnabledToolsets) {
         for (const toolName of dynamicToolDiscovery.defaultEnabledToolsets) {
-          if (this.tools[toolName]) {
+          if (this.tools.get(toolName)) {
             this.enabledTools.add(toolName);
           }
         }
       }
     }
+    console.log(
+      `ToolManager initialized with ${Array.from(this.tools).length} tools`
+    );
   }
   async listTools() {
     return {
-      tools: Object.entries(this.tools)
+      tools: Array.from(this.tools)
         .filter(([name]) => this.enabledTools.has(name))
-        .map(([_, v]) => v.definitions),
+        .map(([_, v]) =>
+          v.definition.inputSchema
+            ? {
+                ...v.definition,
+                inputSchema: zodToJsonSchema(v.definition.inputSchema, {
+                  $refStrategy: "none",
+                }),
+              }
+            : { ...v.definition, inputSchema: zodToJsonSchema(z.object({})) }
+        ),
     };
   }
   async callTool(request: any) {
-    const handler = this.tools[request.params.name]?.handlers;
-    if (!handler) {
-      throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${request.params.name}`);
+    console.log(request);
+    const toolCapability = this.tools.get(request.params.name);
+    if (!toolCapability) {
+      throw new McpError(
+        ErrorCode.MethodNotFound,
+        `Unknown tool: ${request.params.name}`
+      );
     }
     if (!this.enabledTools.has(request.params.name)) {
-      throw new McpError(ErrorCode.MethodNotFound, `Tool not enabled: ${request.params.name}`);
+      throw new McpError(
+        ErrorCode.MethodNotFound,
+        `Tool not enabled: ${request.params.name}`
+      );
     }
-    return handler(request.params.arguments);
+    if (!request.params.arguments) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `Invalid parameters: ${request.params.arguments}`
+      );
+    }
+    const toolDefinition = toolCapability.definition;
+    const inputSchema = toolDefinition.inputSchema;
+    const validationResult = inputSchema.safeParse(request.params.arguments);
+    if (!validationResult.success) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `Invalid parameters: ${validationResult.error}`
+      );
+    }
+    return toolCapability.handler(request.params.arguments);
   }
 
   hasTools() {
-    return Object.keys(this.tools).length > 0;
+    return this.tools.size > 0;
   }
 }

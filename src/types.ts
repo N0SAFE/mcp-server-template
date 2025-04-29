@@ -1,3 +1,6 @@
+import * as z from "zod";
+import { ZodRawShape } from "zod";
+
 // Shared types for McpServer and managers
 export type ToolMode = "readOnly" | "readWrite";
 export type ToolsetConfig = {
@@ -11,11 +14,7 @@ export interface DynamicToolDiscoveryOptions {
 export interface ToolDefinition {
   name: string;
   description: string;
-  inputSchema: {
-    type: string;
-    properties: Record<string, unknown>;
-    required: string[];
-  };
+  inputSchema: z.ZodObject<ZodRawShape>;
   annotations?: {
     title?: string;
     readOnlyHint?: boolean;
@@ -24,3 +23,19 @@ export interface ToolDefinition {
     openWorldHint?: boolean;
   };
 }
+
+export type ToolHandler<T extends ToolDefinition> = (
+  params: z.infer<T["inputSchema"]>
+) => Promisable<{
+  content: {
+    type: string;
+    text: string;
+  }[];
+}>;
+
+export type ToolCapability<T extends ToolDefinition = ToolDefinition> = {
+    definition: T;
+    handler: ToolHandler<T>;
+};
+
+export type Promisable<T> = T | Promise<T>;
