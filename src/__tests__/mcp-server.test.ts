@@ -1,15 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { McpServer } from '../mcp-server.js';
-import { ToolDefinition } from '../types.js';
+import { createTool } from '../utils/tools';
+import { z } from 'zod';
 
-const helloWorldTool: ToolDefinition = {
+const helloWorldTool = {
   name: 'helloWorld',
   description: 'Returns a Hello World greeting.',
-  inputSchema: {
-    type: 'object',
-    properties: {},
-    required: [],
-  },
+  inputSchema: z.object({}),
   annotations: {
     title: 'Hello World Tool',
     readOnlyHint: true,
@@ -27,16 +24,13 @@ describe('McpServer', () => {
       version: '1.0.0',
       toolsetConfig: { mode: 'readOnly' },
       capabilities: {
-        tools: {
-          helloWorld: {
-            definitions: helloWorldTool,
-            handlers: async () => ({
-              content: [
-                { type: 'text', text: 'Hello, World!' },
-              ],
-            }),
-          },
-        },
+        tools: [
+          createTool(helloWorldTool, async () => ({
+            content: [
+              { type: 'text', text: 'Hello, World!' },
+            ],
+          })),
+        ],
       },
     });
   });

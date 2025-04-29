@@ -1,22 +1,20 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ToolManager } from '../manager/tool-manager.js';
-import { ToolDefinition } from '../types.js';
+import { createTool } from '../utils/tools';
+import { z } from 'zod';
 
 describe('ToolManager', () => {
   let toolManager: ToolManager;
-  const toolDef: ToolDefinition = {
+  const toolDef = {
     name: 'testTool',
     description: 'A test tool',
-    inputSchema: { type: 'object', properties: {}, required: [] },
+    inputSchema: z.object({}),
   };
   beforeEach(() => {
     toolManager = new ToolManager(
-      {
-        testTool: {
-          definitions: toolDef,
-          handlers: async () => ({ content: [{ type: 'text', text: 'ok' }] }),
-        },
-      },
+      [
+        createTool(toolDef, async () => ({ content: [{ type: 'text', text: 'ok' }] })),
+      ],
       { mode: 'readOnly' }
     );
   });
