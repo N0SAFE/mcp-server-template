@@ -6,7 +6,10 @@
     "test": "npx vitest --run",
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "sample": "tsx src/sample/hello-world-server.ts",
+    "inspect": "npx --yes @modelcontextprotocol/inspector npm run dev",
+    "inspect:sample": "npx --yes @modelcontextprotocol/inspector npm run sample"
   },
   "keywords": [],
   "author": "",

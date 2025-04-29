@@ -17,7 +17,7 @@ export class ToolManager {
   constructor(
     toolsCapabilities: ToolCapability[],
     toolsetConfig: ToolsetConfig,
-    dynamicToolDiscovery?: DynamicToolDiscoveryOptions
+    dynamicToolDiscovery?: DynamicToolDiscoveryOptions,
   ) {
     this.toolsetConfig = toolsetConfig;
     toolsCapabilities.forEach((capability) => {
