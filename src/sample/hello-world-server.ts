@@ -1,15 +1,18 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { McpServer } from "../mcp-server.js";
-import { ToolDefinition } from "../types.js";
+import { McpServer } from "../mcp-server";
+import * as z from "zod";
+import { createTool, createToolDefinition } from "../utils/tools";
+import { ToolCapability } from "types";
 
-const helloWorldTool: ToolDefinition = {
-  name: "helloWorld",
+const helloWorldTool = createToolDefinition({
+  name: "hello_world",
   description: "Returns a Hello World greeting.",
-  inputSchema: {
-    type: "object",
-    properties: {},
-    required: [],
-  },
+  inputSchema: z.object({
+    name: z
+      .string()
+      .optional()
+      .describe('provide a optional name to replace "World"'),
+  }),
   annotations: {
     title: "Hello World Tool",
     readOnlyHint: true,
@@ -17,7 +20,7 @@ const helloWorldTool: ToolDefinition = {
     idempotentHint: true,
     openWorldHint: false,
   },
-};
+});
 
 class HelloWorldMcpServer extends McpServer {
   constructor() {
@@ -26,16 +29,18 @@ class HelloWorldMcpServer extends McpServer {
       version: "1.0.0",
       toolsetConfig: { mode: "readOnly" },
       capabilities: {
-        tools: {
-          helloWorld: {
-            definitions: helloWorldTool,
-            handlers: async () => ({
+        tools: [
+          createTool(helloWorldTool, async ({ name }) => {
+            return {
               content: [
-                { type: "text", text: "Hello, World!" },
+                {
+                  type: "text",
+                  text: `Hello ${name || "World"}!`,
+                },
               ],
-            }),
-          },
-        },
+            };
+          }),
+        ],
       },
     });
   }

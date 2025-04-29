@@ -2,20 +2,16 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
-  CreateMessageRequestSchema,
-  ErrorCode,
   GetPromptRequestSchema,
   ListPromptsRequestSchema,
   ListResourcesRequestSchema,
   ListToolsRequestSchema,
-  McpError,
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import {
-  ToolDefinition,
-  ToolMode,
   ToolsetConfig,
   DynamicToolDiscoveryOptions,
+  ToolCapability,
 } from "./types";
 import { ToolManager } from "./manager/tool-manager";
 import { ResourceManager } from "./manager/resource-manager";
@@ -37,13 +33,14 @@ export class McpServer {
   }: {
     name: string;
     version: string;
-    capabilities?: any;
+    capabilities?:
+      | { tools?: ToolCapability[]; resources?: any; prompts?: any }
     toolsetConfig: ToolsetConfig;
     dynamicToolDiscovery?: DynamicToolDiscoveryOptions;
   }) {
     this.toolsetConfig = toolsetConfig;
     this.toolManager = new ToolManager(
-      capabilities?.tools || {},
+      capabilities?.tools || [],
       toolsetConfig,
       dynamicToolDiscovery
     );
@@ -72,6 +69,10 @@ export class McpServer {
         },
       }
     );
+    console.log({
+      hasTools,
+      listTools: this.toolManager.listTools()
+    })
     // Register handlers
     if (hasTools) {
       this._server.setRequestHandler(
