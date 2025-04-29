@@ -18,7 +18,6 @@ describe("ToolManager (dynamic tool discovery)", () => {
   });
   const dynamicOptions: DynamicToolDiscoveryOptions = {
     enabled: true,
-    availableToolsets: ["testTool", "anotherTool"],
     defaultEnabledToolsets: [],
   };
   beforeEach(() => {
