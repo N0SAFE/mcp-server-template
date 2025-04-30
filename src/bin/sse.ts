@@ -13,6 +13,10 @@ let transport: SSEServerTransport | null = null;
 app.get("/sse", (req, res) => {
   transport = new SSEServerTransport("/messages", res);
   server.server.connect(transport);
+  server.server.sendLoggingMessage({
+    level: "info",
+    data: "MCP server started",
+  });
 });
 
 app.post("/messages", (req, res) => {
@@ -22,7 +26,3 @@ app.post("/messages", (req, res) => {
 });
 
 app.listen(3000);
-server.server.sendLoggingMessage({
-  level: "info",
-  data: "MCP server started",
-});
