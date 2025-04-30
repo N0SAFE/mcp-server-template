@@ -22,12 +22,31 @@ const helloWorldTool = createToolDefinition({
   },
 });
 
+const dummyTool = createToolDefinition({
+  name: "dummy_tool",
+  description: "A dummy tool for testing.",
+  inputSchema: z.object({
+    input: z.string().describe("Input for the dummy tool"),
+  }),
+  annotations: {
+    title: "Dummy Tool",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: true,
+  },
+});
+
 class HelloWorldMcpServer extends McpServer {
   constructor() {
     super({
-      name: "hello-world-server",
+      name: "hello-world-mcp",
       version: "1.0.0",
       toolsetConfig: { mode: "readOnly" },
+      dynamicToolDiscovery: {
+        enabled: true,
+        defaultEnabledToolsets: [dummyTool.name],
+      },
       capabilities: {
         tools: [
           createTool(helloWorldTool, async ({ name }) => {
@@ -36,6 +55,16 @@ class HelloWorldMcpServer extends McpServer {
                 {
                   type: "text",
                   text: `Hello ${name || "World"}!`,
+                },
+              ],
+            };
+          }),
+          createTool(dummyTool, async ({ input }) => {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Dummy tool received: ${input}`,
                 },
               ],
             };
