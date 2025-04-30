@@ -74,7 +74,6 @@ export class McpServer {
       }
     );
     // Register handlers
-    console.log({hasTools, tools: this.toolManager.listTools(), 'capabilities?.tools': capabilities?.tools});
     if (hasTools) {
       this._server.setRequestHandler(
         ListToolsRequestSchema,
