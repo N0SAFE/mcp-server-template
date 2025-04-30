@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { MainMcpServer } from "index";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { getConfigFromCommanderAndEnv } from "./config";
 
 async function main() {
