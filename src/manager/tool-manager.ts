@@ -288,10 +288,10 @@ export class ToolManager {
   }
 
   private toInternalToolName(name: string): string {
-    return name.replace(`${this.mcpServerName}::`, "");
+    return name.replace(`${this.mcpServerName}__`, "");
   }
   private toExternalToolName(name: string): string {
-    return `${this.mcpServerName}::${name}`;
+    return `${this.mcpServerName}__${name}`;
   }
   private toExternalToolDescription(description: string): string {
     return `[${this.mcpServerName}] ${description}`;
