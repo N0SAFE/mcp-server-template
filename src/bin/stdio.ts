@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { MainMcpServer } from "index";
+import { MainMcpServer } from "../index";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { getConfigFromCommanderAndEnv } from "./config";
 
@@ -11,7 +11,7 @@ async function main() {
   server.server.sendLoggingMessage(
     {
       level: "info",
-      message: "MCP server started",
+      data: "MCP server started",
     },
   )
 }

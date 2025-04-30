@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express from "express";
-import { MainMcpServer } from "index";
+import { MainMcpServer } from "../index";
 import { getConfigFromCommanderAndEnv } from "./config";
 
 const app = express();
@@ -24,5 +24,5 @@ app.post("/messages", (req, res) => {
 app.listen(3000);
 server.server.sendLoggingMessage({
   level: "info",
-  message: "MCP server started",
+  data: "MCP server started",
 });

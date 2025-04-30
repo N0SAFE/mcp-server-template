@@ -1,7 +1,11 @@
 {
   "name": "mcp-server-template",
   "version": "1.0.0",
-  "main": "index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./stdio": "./dist/sample/hello-world-server.js",
+    "./sse": "./dist/sample/hello-world-server.js"
+  },
   "scripts": {
     "test": "npx vitest --run",
     "build": "tsc",

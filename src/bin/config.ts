@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { McpConfig } from "types";
+import { McpConfig } from "../types";
 import { z } from "zod";
 
 const program = new Command();
