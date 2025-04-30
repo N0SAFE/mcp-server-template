@@ -38,16 +38,16 @@ describe('McpServer', () => {
   it('should list enabled tools', async () => {
     const result = await mcpServer['toolManager'].listTools();
     expect(result.tools.length).toBe(1);
-    expect(result.tools[0].name).toBe('test_mcp::helloWorld');
+    expect(result.tools[0].name).toBe('test_mcp__helloWorld');
   });
 
   it('should call enabled tool', async () => {
-    const result = await mcpServer['toolManager'].callTool({ params: { name: 'test_mcp::helloWorld', arguments: {} } });
+    const result = await mcpServer['toolManager'].callTool({ params: { name: 'test_mcp__helloWorld', arguments: {} } });
     expect(result.content[0].text).toBe('Hello, World!');
   });
 
   it('should throw for disabled tool', async () => {
     mcpServer['toolManager']['enabledTools'].delete('helloWorld');
-    await expect(mcpServer['toolManager'].callTool({ params: { name: 'test_mcp::helloWorld', arguments: {} } })).rejects.toThrow();
+    await expect(mcpServer['toolManager'].callTool({ params: { name: 'test_mcp__helloWorld', arguments: {} } })).rejects.toThrow();
   });
 });

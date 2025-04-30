@@ -22,14 +22,14 @@ describe('ToolManager', () => {
   it('lists enabled tools', async () => {
     const result = await toolManager.listTools();
     expect(result.tools.length).toBe(1);
-    expect(result.tools[0].name).toBe('test_mcp::testTool');
+    expect(result.tools[0].name).toBe('test_mcp__testTool');
   });
   it('calls enabled tool', async () => {
-    const result = await toolManager.callTool({ params: { name: 'test_mcp::testTool', arguments: {} } });
+    const result = await toolManager.callTool({ params: { name: 'test_mcp__testTool', arguments: {} } });
     expect(result.content[0].text).toBe('ok');
   });
   it('throws for disabled tool', async () => {
     toolManager['enabledTools'].delete('testTool');
-    await expect(toolManager.callTool({ params: { name: 'test_mcp::testTool', arguments: {} } })).rejects.toThrow();
+    await expect(toolManager.callTool({ params: { name: 'test_mcp__testTool', arguments: {} } })).rejects.toThrow();
   });
 });
