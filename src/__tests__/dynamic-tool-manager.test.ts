@@ -16,12 +16,13 @@ describe("ToolManager (dynamic tool discovery)", () => {
     description: "Another test tool",
     inputSchema: z.object({}),
   });
-  const dynamicOptions: DynamicToolDiscoveryOptions = {
+  const dynamicOptions = {
     enabled: true,
     defaultEnabledToolsets: [],
-  };
+  } satisfies DynamicToolDiscoveryOptions;
   beforeEach(() => {
     toolManager = new ToolManager(
+      "test_mcp",
       [
         createTool(toolDef, async () => ({
           content: [{ type: "text", text: "ok" }],
@@ -34,82 +35,109 @@ describe("ToolManager (dynamic tool discovery)", () => {
       dynamicOptions
     );
   });
-  it("should include dynamic_tool_list and dynamic_tool_trigger", async () => {
+  it("should include test_mcp_dynamic_tool_list and test_mcp_dynamic_tool_trigger", async () => {
     const result = await toolManager.listTools();
     const toolNames = result.tools.map((t) => t.name);
-    expect(toolNames).toContain("dynamic_tool_list");
-    expect(toolNames).toContain("dynamic_tool_trigger");
+    expect(toolNames).toContain("test_mcp::dynamic_tool_list");
+    expect(toolNames).toContain("test_mcp::dynamic_tool_trigger");
   });
   it("should list available and enabled tools via dynamic_tool_list", async () => {
     const result = await toolManager.callTool({
-      params: { name: "dynamic_tool_list", arguments: {} },
+      params: { name: "test_mcp::dynamic_tool_list", arguments: {} },
     });
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.available).toContain("testTool");
-    expect(parsed.enabled).toContain("dynamic_tool_list");
+    expect(parsed.available).toContain("test_mcp::testTool");
+    expect(parsed.enabled).toContain("test_mcp::dynamic_tool_list");
   });
   it("should enable and disable a tool via dynamic_tool_trigger", async () => {
     // Disable testTool
     await toolManager.callTool({
       params: {
-        name: "dynamic_tool_trigger",
-        arguments: { toolsets: [{ name: "testTool", trigger: "disable" }] },
+        name: "test_mcp::dynamic_tool_trigger",
+        arguments: { toolsets: [{ name: "test_mcp::testTool", trigger: "disable" }] },
       },
     });
     let result = await toolManager.listTools();
     let toolNames = result.tools.map((t) => t.name);
-    expect(toolNames).not.toContain("testTool");
+    expect(toolNames).not.toContain("test_mcp::testTool");
     // Enable testTool
     await toolManager.callTool({
       params: {
-        name: "dynamic_tool_trigger",
-        arguments: { toolsets: [{ name: "testTool", trigger: "enable" }] },
+        name: "test_mcp::dynamic_tool_trigger",
+        arguments: { toolsets: [{ name: "test_mcp::testTool", trigger: "enable" }] },
       },
     });
     result = await toolManager.listTools();
     toolNames = result.tools.map((t) => t.name);
-    expect(toolNames).toContain("testTool");
+    expect(toolNames).toContain("test_mcp::testTool");
   });
   it("should enable and disable multiple tools in one request via dynamic_tool_trigger", async () => {
     // Disable both tools in one request
     const disableResult = await toolManager.callTool({
       params: {
-        name: "dynamic_tool_trigger",
+        name: "test_mcp::dynamic_tool_trigger",
         arguments: {
           toolsets: [
-            { name: "testTool", trigger: "disable" },
-            { name: "anotherTool", trigger: "disable" },
+            { name: "test_mcp::testTool", trigger: "disable" },
+            { name: "test_mcp::anotherTool", trigger: "disable" },
           ],
         },
       },
     });
     let result = await toolManager.listTools();
     let toolNames = result.tools.map((t) => t.name);
-    expect(toolNames).not.toContain("testTool");
-    expect(toolNames).not.toContain("anotherTool");
+    expect(toolNames).not.toContain("test_mcp::testTool");
+    expect(toolNames).not.toContain("test_mcp::anotherTool");
     // Check return value after disabling
     const disabledParsed = JSON.parse(disableResult.content[0].text);
-    expect(disabledParsed.enabled).not.toContain("testTool");
-    expect(disabledParsed.enabled).not.toContain("anotherTool");
+    expect(disabledParsed.enabled).not.toContain("test_mcp::testTool");
+    expect(disabledParsed.enabled).not.toContain("test_mcp::anotherTool");
     // Enable both tools in one request
     const enableResult = await toolManager.callTool({
       params: {
-        name: "dynamic_tool_trigger",
+        name: "test_mcp::dynamic_tool_trigger",
         arguments: {
           toolsets: [
-            { name: "testTool", trigger: "enable" },
-            { name: "anotherTool", trigger: "enable" },
+            { name: "test_mcp::testTool", trigger: "enable" },
+            { name: "test_mcp::anotherTool", trigger: "enable" },
           ],
         },
       },
     });
     result = await toolManager.listTools();
     toolNames = result.tools.map((t) => t.name);
-    expect(toolNames).toContain("testTool");
-    expect(toolNames).toContain("anotherTool");
+    expect(toolNames).toContain("test_mcp::testTool");
+    expect(toolNames).toContain("test_mcp::anotherTool");
     // Check return value after enabling
     const enabledParsed = JSON.parse(enableResult.content[0].text);
-    expect(enabledParsed.enabled).toContain("testTool");
-    expect(enabledParsed.enabled).toContain("anotherTool");
+    expect(enabledParsed.enabled).toContain("test_mcp::testTool");
+    expect(enabledParsed.enabled).toContain("test_mcp::anotherTool");
+  });
+
+  it("should call notifyEnabledToolsChanged and trigger subscriptions", async () => {
+    let called = false;
+    const callback = (tools) => {
+      called = true;
+      expect(Array.isArray(tools.tools)).toBe(true);
+    };
+    toolManager.onEnabledToolsChanged(callback);
+    // Trigger a change
+    await toolManager.callTool({
+      params: {
+        name: "test_mcp::dynamic_tool_trigger",
+        arguments: { toolsets: [{ name: "test_mcp::testTool", trigger: "disable" }] },
+      },
+    });
+    expect(called).toBe(true);
+    toolManager.offEnabledToolsChanged(callback);
+    called = false;
+    // Should not call after off
+    await toolManager.callTool({
+      params: {
+        name: "test_mcp::dynamic_tool_trigger",
+        arguments: { toolsets: [{ name: "test_mcp::testTool", trigger: "enable" }] },
+      },
+    });
+    expect(called).toBe(false);
   });
 });
