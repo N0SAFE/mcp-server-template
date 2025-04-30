@@ -30,12 +30,14 @@ export class McpServer {
     capabilities,
     toolsetConfig,
     dynamicToolDiscovery,
+    instructions,
   }: {
     name: string;
     version: string;
     capabilities?: { tools?: ToolCapability[]; resources?: any; prompts?: any };
     toolsetConfig: ToolsetConfig;
     dynamicToolDiscovery?: DynamicToolDiscoveryOptions;
+    instructions?: string;
   }) {
     this.toolsetConfig = toolsetConfig;
     this.toolManager = new ToolManager(
@@ -67,6 +69,7 @@ export class McpServer {
           ...(hasResources ? { resources: {} } : {}),
           ...(hasPrompts ? { prompts: {} } : {}),
         },
+        instructions,
       }
     );
     // Register handlers
