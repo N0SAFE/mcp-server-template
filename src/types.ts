@@ -38,3 +38,14 @@ export type ToolCapability<T extends ToolDefinition = ToolDefinition> = {
 };
 
 export type Promisable<T> = T | Promise<T>;
+
+export type McpConfig = {
+  toolsetConfig: any;
+  availableTools: string[];
+  dynamicToolDiscovery: {
+    enabled: true;
+    defaultEnabledToolsets: string[];
+  } | {
+    enabled: false;
+  };
+};

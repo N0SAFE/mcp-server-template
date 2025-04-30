@@ -1,16 +1,23 @@
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpConfig, ToolCapability } from "types.js";
 import { McpServer } from "./mcp-server.js";
 
-async function main() {
-  const server = new McpServer({
-    name: "hello-world-server",
-    version: "1.0.0",
-    toolsetConfig: { mode: "readOnly" },
-    capabilities: {},
-  });
-  const transport = new StdioServerTransport();
-  await server.server.connect(transport);
-  console.error("MCP server running on stdio");
-}
+const tools = [] as ToolCapability[];
 
-main().catch((error) => console.error(error));
+export class MainMcpServer extends McpServer {
+  constructor(config: McpConfig) {
+    super({
+      name: "main-mcp-server",
+      version: "1.0.0",
+      toolsetConfig: config.toolsetConfig || { mode: "readWrite" },
+      capabilities: {
+        tools:
+          config.availableTools?.length ? config.availableTools?.length > 0
+            ? tools.filter((tool) =>
+                config.availableTools?.includes(tool.definition.name)
+              )
+            : tools : tools,
+      },
+      dynamicToolDiscovery: config.dynamicToolDiscovery || { enabled: true },
+    });
+  }
+}

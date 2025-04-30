@@ -2,7 +2,6 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { McpServer } from "../mcp-server";
 import * as z from "zod";
 import { createTool, createToolDefinition } from "../utils/tools";
-import { ToolCapability } from "types";
 
 const helloWorldTool = createToolDefinition({
   name: "hello_world",
