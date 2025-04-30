@@ -41,7 +41,10 @@ export class ToolManager {
       });
     } else {
       this.tools.forEach((_, name) => {
-        if (this.toolsetConfig.mode === "readOnly") {
+        if (this.toolsetConfig.mode === "readWrite") {
+          this.enabledTools.add(name);
+        }
+        if (this.toolsetConfig.mode === "readOnly" && this.tools.get(name)?.definition.annotations?.readOnlyHint) {
           this.enabledTools.add(name);
         }
       });
