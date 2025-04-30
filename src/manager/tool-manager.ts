@@ -4,20 +4,28 @@ import {
   ToolDefinition,
   ToolsetConfig,
   DynamicToolDiscoveryOptions,
-  Promisable,
   ToolCapability,
 } from "../types";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
+export type ToolListResponse = {
+  tools: (Omit<ToolDefinition, "inputSchema"> & {
+    inputSchema: any;
+  })[];
+};
+
 export class ToolManager {
   private readonly tools: Map<string, ToolCapability> = new Map();
   private enabledTools: Set<string> = new Set();
+  private enabledToolSubscriptions: Set<
+    (tools: ToolListResponse) => void
+  > = new Set();
   private toolsetConfig: ToolsetConfig;
   constructor(
     toolsCapabilities: ToolCapability[],
     toolsetConfig: ToolsetConfig,
-    dynamicToolDiscovery?: DynamicToolDiscoveryOptions,
+    dynamicToolDiscovery?: DynamicToolDiscoveryOptions
   ) {
     this.toolsetConfig = toolsetConfig;
     toolsCapabilities.forEach((capability) => {
@@ -38,14 +46,19 @@ export class ToolManager {
     }
     // Dynamic tool discovery logic
     if (dynamicToolDiscovery?.enabled) {
+      const dynamicToolDiscoverySuffix = dynamicToolDiscovery.name.replace(
+        /[^a-zA-Z0-9]/g, '_'
+      );
+      const dynamicToolListName = `${dynamicToolDiscoverySuffix}_dynamic_tool_list`;
+      const dynamicToolTriggerName = `${dynamicToolDiscoverySuffix}_dynamic_tool_trigger`;
       // Tool to list available/enabled tools
-      this.tools.set("dynamic_tool_list", {
+      this.tools.set(dynamicToolListName, {
         definition: {
-          name: "dynamic_tool_list",
+          name: dynamicToolListName,
           description: "List, enable, or disable available tools dynamically.",
           inputSchema: z.object({}),
           annotations: {
-            title: "Dynamic Tool Discovery",
+            title: `[${dynamicToolDiscovery.name}] Dynamic Tool Discovery`,
             readOnlyHint: true,
             destructiveHint: false,
             idempotentHint: true,
@@ -68,11 +81,11 @@ export class ToolManager {
           ],
         }),
       });
-      this.enabledTools.add("dynamic_tool_list");
+      this.enabledTools.add(dynamicToolListName);
       // Tool to enable/disable toolsets
-      this.tools.set("dynamic_tool_trigger", {
+      this.tools.set(dynamicToolTriggerName, {
         definition: {
-          name: "dynamic_tool_trigger",
+          name: dynamicToolTriggerName,
           description: "Enable or disable multiple toolsets.",
           inputSchema: z.object({
             toolsets: z.array(
@@ -92,7 +105,7 @@ export class ToolManager {
             ),
           }),
           annotations: {
-            title: "Dynamic Tool Trigger",
+            title: `[${dynamicToolDiscovery.name}] Dynamic Tool Trigger`,
             readOnlyHint: false,
             destructiveHint: false,
             idempotentHint: true,
@@ -108,6 +121,7 @@ export class ToolManager {
               this.enabledTools.delete(name);
             }
           }
+          await this.notifyEnabledToolsChanged();
           return {
             content: [
               {
@@ -125,13 +139,13 @@ export class ToolManager {
           };
         },
       });
-      this.enabledTools.add("dynamic_tool_trigger");
+      this.enabledTools.add(dynamicToolTriggerName);
     }
     console.log(
       `ToolManager initialized with ${Array.from(this.tools).length} tools`
     );
   }
-  async listTools() {
+  listTools(): ToolListResponse {
     return {
       tools: Array.from(this.tools)
         .filter(([name]) => this.enabledTools.has(name))
@@ -177,6 +191,20 @@ export class ToolManager {
       );
     }
     return toolCapability.handler(request.params.arguments);
+  }
+
+  private notifyEnabledToolsChanged() {
+    const tools = this.listTools();
+    for (const callback of this.enabledToolSubscriptions) {
+      callback(tools);
+    }
+  }
+
+  onEnabledToolsChanged(callback: (tools: ToolListResponse) => void): void {
+    this.enabledToolSubscriptions.add(callback);
+  }
+  offEnabledToolsChanged(callback: (tools: ToolListResponse) => void): void {
+    this.enabledToolSubscriptions.delete(callback);
   }
 
   hasTools() {
