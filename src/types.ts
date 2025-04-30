@@ -9,7 +9,6 @@ export type ToolsetConfig = {
 export interface DynamicToolDiscoveryOptions {
   enabled: boolean;
   defaultEnabledToolsets?: string[];
-  name: string;
 }
 export interface ToolDefinition {
   name: string;

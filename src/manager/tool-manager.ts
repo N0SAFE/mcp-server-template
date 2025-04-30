@@ -18,21 +18,23 @@ export type ToolListResponse = {
 export class ToolManager {
   private readonly tools: Map<string, ToolCapability> = new Map();
   private enabledTools: Set<string> = new Set();
-  private enabledToolSubscriptions: Set<
-    (tools: ToolListResponse) => void
-  > = new Set();
-  private toolsetConfig: ToolsetConfig;
+  private enabledToolSubscriptions: Set<(tools: ToolListResponse) => void> =
+    new Set();
+  private mcpServerName: string;
   constructor(
-    toolsCapabilities: ToolCapability[],
-    toolsetConfig: ToolsetConfig,
-    dynamicToolDiscovery?: DynamicToolDiscoveryOptions
+    mcpServerName: string,
+    private toolsCapabilities: ToolCapability[],
+    private toolsetConfig: ToolsetConfig,
+    private dynamicToolDiscovery?: DynamicToolDiscoveryOptions
   ) {
-    this.toolsetConfig = toolsetConfig;
-    toolsCapabilities.forEach((capability) => {
+    // replace -, sentence case and space with _ in mcpServerName
+    this.mcpServerName = mcpServerName;
+
+    this.toolsCapabilities.forEach((capability) => {
       this.tools.set(capability.definition.name, capability);
     });
-    if (dynamicToolDiscovery?.enabled) {
-      dynamicToolDiscovery.defaultEnabledToolsets?.forEach((toolName) => {
+    if (this.dynamicToolDiscovery?.enabled) {
+      this.dynamicToolDiscovery.defaultEnabledToolsets?.forEach((toolName) => {
         if (this.tools.get(toolName)) {
           this.enabledTools.add(toolName);
         }
@@ -45,12 +47,9 @@ export class ToolManager {
       });
     }
     // Dynamic tool discovery logic
-    if (dynamicToolDiscovery?.enabled) {
-      const dynamicToolDiscoverySuffix = dynamicToolDiscovery.name.replace(
-        /[^a-zA-Z0-9]/g, '_'
-      );
-      const dynamicToolListName = `${dynamicToolDiscoverySuffix}_dynamic_tool_list`;
-      const dynamicToolTriggerName = `${dynamicToolDiscoverySuffix}_dynamic_tool_trigger`;
+    if (this.dynamicToolDiscovery?.enabled) {
+      const dynamicToolListName = `dynamic_tool_list`;
+      const dynamicToolTriggerName = `dynamic_tool_trigger`;
       // Tool to list available/enabled tools
       this.tools.set(dynamicToolListName, {
         definition: {
@@ -58,7 +57,7 @@ export class ToolManager {
           description: "List, enable, or disable available tools dynamically.",
           inputSchema: z.object({}),
           annotations: {
-            title: `[${dynamicToolDiscovery.name}] Dynamic Tool Discovery`,
+            title: `Dynamic Tool Discovery`,
             readOnlyHint: true,
             destructiveHint: false,
             idempotentHint: true,
@@ -71,8 +70,8 @@ export class ToolManager {
               type: "text",
               text: JSON.stringify(
                 {
-                  available: Array.from(this.tools.keys()),
-                  enabled: Array.from(this.enabledTools),
+                  available: Array.from(this.tools.keys()).map(tool => this.toExternalToolName(tool)),
+                  enabled: Array.from(this.enabledTools).map(tool => this.toExternalToolName(tool)),
                 },
                 null,
                 2
@@ -94,8 +93,8 @@ export class ToolManager {
                   .string()
                   .refine(
                     (name) =>
-                      this.tools.has(name) &&
-                      this.tools.get(name)?.definition.name === name,
+                      this.tools.has(this.toInternalToolName(name)) &&
+                      this.tools.get(this.toInternalToolName(name))?.definition.name === this.toInternalToolName(name),
                     {
                       message: "Invalid toolset name",
                     }
@@ -105,7 +104,7 @@ export class ToolManager {
             ),
           }),
           annotations: {
-            title: `[${dynamicToolDiscovery.name}] Dynamic Tool Trigger`,
+            title: `Dynamic Tool Trigger`,
             readOnlyHint: false,
             destructiveHint: false,
             idempotentHint: true,
@@ -116,9 +115,9 @@ export class ToolManager {
           const { toolsets } = params;
           for (const { name, trigger } of toolsets) {
             if (trigger === "enable") {
-              this.enabledTools.add(name);
+              this.enabledTools.add(this.toInternalToolName(name));
             } else if (trigger === "disable") {
-              this.enabledTools.delete(name);
+              this.enabledTools.delete(this.toInternalToolName(name));
             }
           }
           await this.notifyEnabledToolsChanged();
@@ -128,8 +127,8 @@ export class ToolManager {
                 type: "text",
                 text: JSON.stringify(
                   {
-                    available: Array.from(this.tools.keys()),
-                    enabled: Array.from(this.enabledTools),
+                    available: Array.from(this.tools.keys()).map(tool => this.toExternalToolName(tool)),
+                    enabled: Array.from(this.enabledTools).map(tool => this.toExternalToolName(tool)),
                   },
                   null,
                   2
@@ -141,9 +140,6 @@ export class ToolManager {
       });
       this.enabledTools.add(dynamicToolTriggerName);
     }
-    console.log(
-      `ToolManager initialized with ${Array.from(this.tools).length} tools`
-    );
   }
   listTools(): ToolListResponse {
     return {
@@ -152,24 +148,55 @@ export class ToolManager {
         .map(([_, v]) =>
           v.definition.inputSchema
             ? {
-                ...v.definition,
+                ...(v.definition.annotations
+                  ? {
+                      ...v.definition,
+                      annotations: {
+                        ...v.definition.annotations,
+                        title: this.toExternalToolDescription(
+                          v.definition.description
+                        ),
+                      },
+                    }
+                  : v.definition),
                 inputSchema: zodToJsonSchema(v.definition.inputSchema, {
                   $refStrategy: "none",
                 }),
               }
-            : { ...v.definition, inputSchema: zodToJsonSchema(z.object({})) }
-        ),
+            : {
+                ...(v.definition.annotations
+                  ? {
+                      ...v.definition,
+                      annotations: {
+                        ...v.definition.annotations,
+                        title: this.toExternalToolDescription(
+                          v.definition.description
+                        ),
+                      },
+                    }
+                  : v.definition),
+                inputSchema: zodToJsonSchema(z.object({})),
+              }
+        )
+        .map((tool) => {
+          return {
+            ...tool,
+            name: this.toExternalToolName(tool.name),
+            description: this.toExternalToolDescription(tool.description),
+          };
+        }),
     };
   }
   async callTool(request: any) {
-    const toolCapability = this.tools.get(request.params.name);
+    const toolName = this.toInternalToolName(request.params.name);
+    const toolCapability = this.tools.get(toolName);
     if (!toolCapability) {
       throw new McpError(
         ErrorCode.MethodNotFound,
         `Unknown tool: ${request.params.name}`
       );
     }
-    if (!this.enabledTools.has(request.params.name)) {
+    if (!this.enabledTools.has(toolName)) {
       throw new McpError(
         ErrorCode.MethodNotFound,
         `Tool not enabled: ${request.params.name}`
@@ -200,11 +227,32 @@ export class ToolManager {
     }
   }
 
+  private toInternalToolName(name: string): string {
+    return name.replace(`${this.mcpServerName}::`, "");
+  }
+  private toExternalToolName(name: string): string {
+    return `${this.mcpServerName}::${name}`;
+  }
+  private toExternalToolDescription(description: string): string {
+    return `[${this.mcpServerName}] ${description}`;
+  }
+
   onEnabledToolsChanged(callback: (tools: ToolListResponse) => void): void {
     this.enabledToolSubscriptions.add(callback);
   }
   offEnabledToolsChanged(callback: (tools: ToolListResponse) => void): void {
     this.enabledToolSubscriptions.delete(callback);
+  }
+
+  setMcpServerName(name: string) {
+    this.mcpServerName = name;
+    if (this.dynamicToolDiscovery?.enabled) {
+      this.notifyEnabledToolsChanged();
+    }
+  }
+
+  dynamicToolDiscoveryEnabled(): boolean {
+    return this.dynamicToolDiscovery?.enabled ?? false;
   }
 
   hasTools() {

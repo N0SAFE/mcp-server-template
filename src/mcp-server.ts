@@ -35,17 +35,14 @@ export class McpServer {
     version: string;
     capabilities?: { tools?: ToolCapability[]; resources?: any; prompts?: any };
     toolsetConfig: ToolsetConfig;
-    dynamicToolDiscovery?: Omit<DynamicToolDiscoveryOptions, "name"> & {
-      name?: string;
-    };
+    dynamicToolDiscovery?: DynamicToolDiscoveryOptions;
   }) {
     this.toolsetConfig = toolsetConfig;
     this.toolManager = new ToolManager(
+      name,
       capabilities?.tools || [],
       toolsetConfig,
       dynamicToolDiscovery
-        ? { ...dynamicToolDiscovery, name: dynamicToolDiscovery?.name || name }
-        : undefined
     );
     // Ensure resources and prompts are always valid objects
     const resources = capabilities?.resources ?? {
