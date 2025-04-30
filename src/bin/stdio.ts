@@ -8,7 +8,12 @@ async function main() {
   const server = new MainMcpServer(getConfigFromCommanderAndEnv());
   const transport = new StdioServerTransport();
   await server.server.connect(transport);
-  console.log("MCP server running on stdio (CLI mode)");
+  server.server.sendLoggingMessage(
+    {
+      level: "info",
+      message: "MCP server started",
+    },
+  )
 }
 
 main().catch((err) => {

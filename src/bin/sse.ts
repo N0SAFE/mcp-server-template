@@ -6,9 +6,7 @@ import { MainMcpServer } from "index";
 import { getConfigFromCommanderAndEnv } from "./config";
 
 const app = express();
-const server = new MainMcpServer(
-  getConfigFromCommanderAndEnv()
-);
+const server = new MainMcpServer(getConfigFromCommanderAndEnv());
 
 let transport: SSEServerTransport | null = null;
 
@@ -24,4 +22,7 @@ app.post("/messages", (req, res) => {
 });
 
 app.listen(3000);
-console.log("MCP server running on SSE (HTTP mode)");
+server.server.sendLoggingMessage({
+  level: "info",
+  message: "MCP server started",
+});
