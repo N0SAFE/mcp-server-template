@@ -5,6 +5,7 @@ import {
   ToolsetConfig,
   DynamicToolDiscoveryOptions,
   ToolCapability,
+  AuthInfo,
 } from "../types";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
@@ -21,6 +22,18 @@ export class ToolManager {
   private enabledToolSubscriptions: Set<(tools: ToolListResponse) => void> =
     new Set();
   private mcpServerName: string;
+  private lastInfoOpts!: [
+    { method: "tools/list"; params: Record<string, unknown> },
+    {
+      signal: AbortSignal;
+      sessionId: string;
+      _meta: unknown;
+      sendNotification: (type: string, payload: unknown) => void;
+      sendRequest: () => Promise<unknown>;
+      authInfo: AuthInfo;
+      requestId: string;
+    }
+  ];
   constructor(
     mcpServerName: string,
     private toolsCapabilities: ToolCapability[],
@@ -44,7 +57,10 @@ export class ToolManager {
         if (this.toolsetConfig.mode === "readWrite") {
           this.enabledTools.add(name);
         }
-        if (this.toolsetConfig.mode === "readOnly" && this.tools.get(name)?.definition.annotations?.readOnlyHint) {
+        if (
+          this.toolsetConfig.mode === "readOnly" &&
+          this.tools.get(name)?.definition.annotations?.readOnlyHint
+        ) {
           this.enabledTools.add(name);
         }
       });
@@ -72,7 +88,7 @@ export class ToolManager {
             openWorldHint: false,
           },
         },
-        handler: () => {
+        handler: ({}, req, opts) => {
           // Filter out the dynamic tools themselves from the lists
           const filterDynamic = (name: string) =>
             name !== dynamicToolListName && name !== dynamicToolTriggerName;
@@ -81,7 +97,9 @@ export class ToolManager {
             const def = this.tools.get(name)?.definition;
             return {
               name: this.toExternalToolName(name),
-              description: def ? this.toExternalToolDescription(def.description) : undefined,
+              description: def
+                ? this.toExternalToolDescription(def.description)
+                : undefined,
             };
           };
           return {
@@ -119,22 +137,20 @@ export class ToolManager {
           inputSchema: z.object({
             toolsets: z.array(
               z.object({
-                name: z
-                  .string()
-                  .refine(
-                    (name) => {
-                      const internal = this.toInternalToolName(name);
-                      return (
-                        internal !== dynamicToolListName &&
-                        internal !== dynamicToolTriggerName &&
-                        this.tools.has(internal) &&
-                        this.tools.get(internal)?.definition.name === internal
-                      );
-                    },
-                    {
-                      message: "Invalid toolset name",
-                    }
-                  ),
+                name: z.string().refine(
+                  (name) => {
+                    const internal = this.toInternalToolName(name);
+                    return (
+                      internal !== dynamicToolListName &&
+                      internal !== dynamicToolTriggerName &&
+                      this.tools.has(internal) &&
+                      this.tools.get(internal)?.definition.name === internal
+                    );
+                  },
+                  {
+                    message: "Invalid toolset name",
+                  }
+                ),
                 trigger: z.enum(["enable", "disable"]),
               })
             ),
@@ -147,11 +163,21 @@ export class ToolManager {
             openWorldHint: false,
           },
         },
-        handler: async (params: any) => {
+        handler: async (params, req, opts) => {
+          console.log(
+            `Dynamic tool trigger called with params: ${JSON.stringify(
+              params,
+              null,
+              2
+            )}`
+          );
           const { toolsets } = params;
           for (const { name, trigger } of toolsets) {
             const internal = this.toInternalToolName(name);
-            if (internal === dynamicToolListName || internal === dynamicToolTriggerName) {
+            if (
+              internal === dynamicToolListName ||
+              internal === dynamicToolTriggerName
+            ) {
               throw new McpError(
                 ErrorCode.InvalidParams,
                 `Cannot enable/disable dynamic tools: ${name}`
@@ -163,6 +189,9 @@ export class ToolManager {
                 `Unknown tool: ${name}`
               );
             }
+            console.log(
+              `Dynamic tool trigger: ${trigger} ${name} (${internal})`
+            );
             if (trigger === "enable") {
               this.enabledTools.add(internal);
             } else if (trigger === "disable") {
@@ -177,7 +206,9 @@ export class ToolManager {
             const def = this.tools.get(name)?.definition;
             return {
               name: this.toExternalToolName(name),
-              description: def ? this.toExternalToolDescription(def.description) : undefined,
+              description: def
+                ? this.toExternalToolDescription(def.description)
+                : undefined,
             };
           };
           return {
@@ -204,10 +235,54 @@ export class ToolManager {
       this.enabledTools.add(dynamicToolTriggerName);
     }
   }
-  listTools(): ToolListResponse {
+
+  async isEnabledTool(name: string, authInfo: AuthInfo): Promise<boolean> {
+    console.log(
+      `Checking if tool ${name} is enabled for ${authInfo.clientId}. reult: ${
+        this.enabledTools.has(name) ? "enabled" : "not enabled"
+      } and canBeEnabled: ${
+        this.tools.get(name)?.meta?.canBeEnabled?.(authInfo) !== false
+          ? "true"
+          : "false"
+      } so : ${
+        this.enabledTools.has(name) &&
+        (await this.tools.get(name)?.meta?.canBeEnabled?.(authInfo)) !== false
+          ? "enabled"
+          : "not enabled"
+      }`
+    );
+    return (
+      this.enabledTools.has(name) &&
+      (await this.tools.get(name)?.meta?.canBeEnabled?.(authInfo)) !== false
+    );
+  }
+
+  async listTools(
+    ...[req, opts]: [
+      { method: "tools/list"; params: Record<string, unknown> },
+      {
+        signal: AbortSignal;
+        sessionId: string;
+        _meta: unknown;
+        sendNotification: (type: string, payload: unknown) => void;
+        sendRequest: () => Promise<unknown>;
+        authInfo: AuthInfo;
+        requestId: string;
+      }
+    ]
+  ): Promise<ToolListResponse> {
+    this.lastInfoOpts = [req, opts];
     return {
-      tools: Array.from(this.tools)
-        .filter(([name]) => this.enabledTools.has(name))
+      tools: (
+        await Promise.all(
+          Array.from(this.tools).map(async ([name, v]) => ({
+            enabled: await this.isEnabledTool(name, opts.authInfo),
+            d: [name, v] as const,
+          }))
+        )
+      )
+        .filter(({ enabled }) => enabled)
+        .map(({ d }) => d)
         .map(([_, v]) =>
           v.definition.inputSchema
             ? {
@@ -250,41 +325,69 @@ export class ToolManager {
         }),
     };
   }
-  async callTool(request: any) {
-    const toolName = this.toInternalToolName(request.params.name);
+  async callTool(
+    ...[req, opts]: [
+      {
+        method: "tools/call";
+        params: {
+          _meta: Record<string, unknown>;
+          name: string;
+          arguments: Record<string, unknown>;
+        };
+      },
+      {
+        signal: AbortSignal;
+        sessionId: string;
+        _meta: unknown;
+        sendNotification: (type: string, payload: unknown) => void;
+        sendRequest: () => Promise<unknown>;
+        authInfo: AuthInfo;
+        requestId: string;
+      }
+    ]
+  ) {
+    const toolName = this.toInternalToolName(req.params.name);
     const toolCapability = this.tools.get(toolName);
     if (!toolCapability) {
       throw new McpError(
         ErrorCode.MethodNotFound,
-        `Unknown tool: ${request.params.name}`
+        `Unknown tool: ${req.params.name}`
       );
     }
     if (!this.enabledTools.has(toolName)) {
       throw new McpError(
         ErrorCode.MethodNotFound,
-        `Tool not enabled: ${request.params.name}`
+        `Tool not enabled: ${req.params.name}`
       );
     }
-    if (!request.params.arguments) {
+    if (!req.params.arguments) {
       throw new McpError(
         ErrorCode.InvalidParams,
-        `Invalid parameters: ${request.params.arguments}`
+        `Invalid parameters: ${req.params.arguments}`
       );
     }
     const toolDefinition = toolCapability.definition;
     const inputSchema = toolDefinition.inputSchema;
-    const validationResult = inputSchema.safeParse(request.params.arguments);
+    const validationResult = inputSchema.safeParse(req.params.arguments);
     if (!validationResult.success) {
       throw new McpError(
         ErrorCode.InvalidParams,
         `Invalid parameters: ${validationResult.error}`
       );
     }
-    return toolCapability.handler(request.params.arguments);
+    try {
+      return await toolCapability.handler(validationResult.data, req, opts);
+    } catch (err) {
+      console.error("Tool handler error:", err);
+      if (err instanceof McpError) {
+        throw err;
+      }
+      throw new McpError(ErrorCode.InternalError, `Tool handler error: ${err}`);
+    }
   }
 
-  private notifyEnabledToolsChanged() {
-    const tools = this.listTools();
+  private async notifyEnabledToolsChanged() {
+    const tools = await this.listTools(...this.lastInfoOpts);
     for (const callback of this.enabledToolSubscriptions) {
       callback(tools);
     }

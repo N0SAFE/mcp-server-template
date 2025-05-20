@@ -58,6 +58,11 @@ export class McpServer {
     const hasTools = this.toolManager.hasTools();
     const hasResources = this.resourceManager.hasResources();
     const hasPrompts = this.promptManager.hasPrompts();
+    // Add dynamicToolDiscovery instructions if enabled
+    let dynamicDiscoveryInstructions = '';
+    if (dynamicToolDiscovery) {
+      dynamicDiscoveryInstructions = `\n\n---\n\n# Dynamic Tool Discovery\n\nThis server supports dynamic tool discovery.\n\n- To check if dynamic tool discovery is enabled, look for the presence of tools named dynamic_tool_list and dynamic_tool_trigger in the tool list.\n- If you need to use a tool that is not currently enabled, you can enable it dynamically using the available tool discovery and enabling mechanisms.\n- Always verify if a tool is available by checking for dynamic_tool_list and dynamic_tool_trigger before attempting to enable or use new tools.\n- Use the dynamic tool discovery process to list, enable, and use tools as needed during your workflow.`;
+    }
     this._server = new Server(
       {
         name,
@@ -70,7 +75,7 @@ export class McpServer {
           ...(hasPrompts ? { prompts: {} } : {}),
           logging: {}
         },
-        instructions,
+        instructions: `${instructions}${dynamicDiscoveryInstructions}`,
       }
     );
     // Register handlers

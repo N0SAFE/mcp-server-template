@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { McpServer } from '../mcp-server.js';
 import { createTool } from '../utils/tools';
 import { z } from 'zod';
+import { createCallToolOptions, createCallToolRequest, createListToolsOptions, createListToolsRequest } from './utils.js';
 
 const helloWorldTool = {
   name: 'helloWorld',
@@ -36,18 +37,18 @@ describe('McpServer', () => {
   });
 
   it('should list enabled tools', async () => {
-    const result = await mcpServer['toolManager'].listTools();
+    const result = await mcpServer['toolManager'].listTools(createListToolsRequest(), createListToolsOptions());
     expect(result.tools.length).toBe(1);
     expect(result.tools[0].name).toBe('test_mcp__helloWorld');
   });
 
   it('should call enabled tool', async () => {
-    const result = await mcpServer['toolManager'].callTool({ params: { name: 'test_mcp__helloWorld', arguments: {} } });
+    const result = await mcpServer['toolManager'].callTool(createCallToolRequest('test_mcp__helloWorld', {}), createCallToolOptions());
     expect(result.content[0].text).toBe('Hello, World!');
   });
 
   it('should throw for disabled tool', async () => {
     mcpServer['toolManager']['enabledTools'].delete('helloWorld');
-    await expect(mcpServer['toolManager'].callTool({ params: { name: 'test_mcp__helloWorld', arguments: {} } })).rejects.toThrow();
+    await expect(mcpServer['toolManager'].callTool(createCallToolRequest('test_mcp__helloWorld', {}), createCallToolOptions())).rejects.toThrow();
   });
 });
